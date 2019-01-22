@@ -93,10 +93,17 @@ $Select.Font                          = $Font
 
 $Users.controls.AddRange(@($DomainUsers,$Select))
 
-# Local Users
-#$dmnUsers = Get-LocalUser | ? Enabled -eq $true | sort Name
-# Domain Users
-$dmnUsers = Get-ADUser -Filter * | ? Enabled -eq $true | sort Name
+# Determine if in domain
+$inDomain = (Get-WmiObject -Class Win32_ComputerSystem).PartOfDomain
+
+if($inDomain -eq $true){
+    # Domain Users
+    $dmnUsers = Get-ADUser -Filter * | ? Enabled -eq $true | sort Name
+}else {
+    # Local Users
+    $dmnUsers = Get-LocalUser | ? Enabled -eq $true | sort Name
+}
+
 foreach($user in $dmnUsers){
     $listItem = New-Object System.Windows.Forms.ListViewItem("$($user.Name)")
     $DomainUsers.Items.Add($listItem)
@@ -130,12 +137,15 @@ $Reset.Add_Click({
     $pass = ConvertTo-SecureString -AsPlainText –String $NewPass.Text -force
 
     Try{
-        # Set password for Local User
-        # Set-LocalUser -Name $userToReset -Password $pass
+        if($inDomain -eq $true){ 
+            # Set password for Domain User
+            Set-ADAccountPassword -Identity $userToReset -Reset -NewPassword $pass
+            Set-ADUser -Identity $userToReset -ChangePasswordAtLogon $ResetAfter.Checked -PasswordNeverExpires $false
+        }else { 
+            # Set password for Local User
+            Set-LocalUser -Name $userToReset -Password $pass
+        }
         
-        # Set password for Domain User
-        Set-ADAccountPassword -Identity $userToReset -Reset -NewPassword $pass
-        Set-ADUser -Identity $userToReset -ChangePasswordAtLogon $ResetAfter.Checked -PasswordNeverExpires $false
         [System.Windows.MessageBox]::Show('סיסמה אופסה!')
     } Catch {
         $ErrorMessage = $_.Exception.Message
